@@ -4,7 +4,7 @@ const INITIAL_ZOOM = 9;
 
 // Googleマップを背景に使う場合はここにAPIキーを入れる（Google Cloudで取得、要ビリング設定）。
 // 空のままなら地理院地図のみで動作する。
-const GOOGLE_MAPS_API_KEY = "";
+const GOOGLE_MAPS_API_KEY = "AIzaSyCtL-wwxXA-7Ag6ucXyguE8KH7HZtN9Fjk";
 
 const map = L.map("map", { zoomControl: true }).setView(KUMAMOTO_CENTER, INITIAL_ZOOM);
 
