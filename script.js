@@ -9,25 +9,14 @@ const GOOGLE_MAPS_API_KEY = "AIzaSyCtL-wwxXA-7Ag6ucXyguE8KH7HZtN9Fjk";
 const map = L.map("map", { zoomControl: false }).setView(KUMAMOTO_CENTER, INITIAL_ZOOM);
 
 // 国土地理院（地理院地図）の標準地図タイルをベースマップに使用
-const GSI_ATTRIBUTION =
-  '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">地理院タイル</a>';
 const gsiLayer = L.tileLayer("https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png", {
-  attribution: GSI_ATTRIBUTION,
+  attribution:
+    '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">地理院タイル</a>',
   maxZoom: 18,
 }).addTo(map);
 
-// 地理院地図の航空写真（同じ地理院タイルの別レイヤー）
-const gsiPhotoLayer = L.tileLayer(
-  "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg",
-  {
-    attribution: GSI_ATTRIBUTION,
-    maxZoom: 18,
-  }
-);
-
 const baseLayers = {
   "地理院地図（標準）": gsiLayer,
-  "地理院地図（航空写真）": gsiPhotoLayer,
 };
 
 // 都市計画データの出典表示（国土数値情報の利用条件・CC BY 4.0 表示義務に基づく）
@@ -90,11 +79,11 @@ const LAYER_DEFS = [
     categoryFields: [],
     defaultOn: true,
     fillOpacity: 0,
-    weight: 4,
-    dashArray: "12 8",
+    weight: 3,
+    dashArray: "10 6",
     // 地理院地図の徒歩道・行政界（グレー系）に埋もれないよう、地図上で使われない
-    // 彩度の高いマゼンタ系の色にしている
-    color: "#e6007a",
+    // 濃い紺色にしている
+    color: "#283593",
   },
   {
     key: "kuiki_kubun",
@@ -109,7 +98,7 @@ const LAYER_DEFS = [
     file: "youto_chiiki.geojson",
     label: "用途地域",
     categoryFields: ["YoutoName", "AreaType"],
-    defaultOn: true,
+    defaultOn: false,
     fillOpacity: 0.45,
     splitByCategory: true,
   },
@@ -221,43 +210,6 @@ function styleForCategory(layerKey, categoryName, fallbackIndex, overrideColor) 
     : FALLBACK_PALETTE[fallbackIndex % FALLBACK_PALETTE.length];
 }
 
-function buildInfoHtml(properties) {
-  const rows = Object.entries(properties || {})
-    .filter(([key]) => key !== "layer" && key !== "path")
-    .map(([key, value]) => `<tr><td class="label">${key}</td><td>${value ?? ""}</td></tr>`)
-    .join("");
-  return `<table>${rows}</table>`;
-}
-
-function showInfoPanel(properties) {
-  document.getElementById("info-content").innerHTML = buildInfoHtml(properties);
-  document.getElementById("info-panel").classList.remove("hidden");
-}
-
-document.getElementById("info-close").addEventListener("click", () => {
-  document.getElementById("info-panel").classList.add("hidden");
-});
-
-// overlayLabel(レイヤー一覧に出す名前) -> { layer, categoryNames: Set }
-const overlayRegistry = new Map();
-function renderLegend() {
-  const legend = document.getElementById("legend");
-  legend.innerHTML = "";
-  const shown = new Set();
-  overlayRegistry.forEach(({ layer, categoryNames }) => {
-    if (!map.hasLayer(layer)) return;
-    categoryNames.forEach((name) => shown.add(name));
-  });
-  shown.forEach((name) => {
-    const style = CATEGORY_COLORS[name];
-    if (!style) return; // 動的割当ての色は凡例が煩雑になるため省略
-    const item = document.createElement("div");
-    item.className = "legend-item";
-    item.innerHTML = `<span class="legend-swatch" style="background:${style.fillColor};border-color:${style.color}"></span>${name}`;
-    legend.appendChild(item);
-  });
-}
-
 function makeFeatureLayer(features, def, fallbackIndex, fixedCategoryName) {
   return L.geoJSON(
     { type: "FeatureCollection", features },
@@ -275,19 +227,21 @@ function makeFeatureLayer(features, def, fallbackIndex, fixedCategoryName) {
           fillOpacity: def.fillOpacity,
         };
       },
-      onEachFeature: (feature, lyr) => {
-        lyr.on("click", () => showInfoPanel(feature.properties));
-      },
     }
   );
 }
+
+// overlayLabel(レイヤー一覧に出す名前) -> { layer, categoryFields }
+// categoryFieldsは、タップした地点の属性から表示名を求めるために使う
+// （splitByCategoryのレイヤーはラベル自体に種別名を含むため空配列でよい）
+const overlayRegistry = new Map();
 
 let pendingLayers = LAYER_DEFS.length;
 const bounds = L.latLngBounds([]);
 let layersControl = null;
 
-function registerOverlay(label, layer, categoryNames, defaultOn) {
-  overlayRegistry.set(label, { layer, categoryNames });
+function registerOverlay(label, layer, categoryFields, defaultOn) {
+  overlayRegistry.set(label, { layer, categoryFields });
   if (defaultOn) {
     layer.addTo(map);
     bounds.extend(layer.getBounds());
@@ -312,16 +266,14 @@ LAYER_DEFS.forEach((def, defIndex) => {
           .sort(([a], [b]) => a.localeCompare(b, "ja"))
           .map(([categoryName, features], i) => {
             const layer = makeFeatureLayer(features, def, defIndex + i, categoryName);
-            registerOverlay(`${def.label}：${categoryName}`, layer, new Set([categoryName]), def.defaultOn);
+            registerOverlay(`${def.label}：${categoryName}`, layer, [], def.defaultOn);
             return { categoryName, layer };
           });
       } else {
-        const usedCategories = new Set();
         const layer = L.geoJSON(geojson, {
           renderer: sharedRenderer,
           style: (feature) => {
             const categoryName = findCategoryName(feature.properties, def.categoryFields);
-            if (categoryName) usedCategories.add(categoryName);
             const style = styleForCategory(def.key, categoryName, defIndex, def.color);
             return {
               color: style.color,
@@ -331,14 +283,10 @@ LAYER_DEFS.forEach((def, defIndex) => {
               fillOpacity: def.fillOpacity,
             };
           },
-          onEachFeature: (feature, lyr) => {
-            lyr.on("click", () => showInfoPanel(feature.properties));
-          },
         });
         def._layer = layer;
-        registerOverlay(def.label, layer, usedCategories, def.defaultOn);
+        registerOverlay(def.label, layer, def.categoryFields, def.defaultOn);
       }
-      renderLegend();
     })
     .catch((err) => {
       console.warn(`[レイヤー未配置] ${def.label}: ${err.message}`);
@@ -348,12 +296,66 @@ LAYER_DEFS.forEach((def, defIndex) => {
       if (pendingLayers === 0) {
         if (bounds.isValid()) map.fitBounds(bounds);
         layersControl = L.control
-          .layers(baseLayers, null, { collapsed: true, position: "topleft" })
+          .layers(baseLayers, null, { collapsed: true, position: "topright" })
           .addTo(map);
         new LayerPanelControl({ position: "topleft" }).addTo(map);
-        setUpGoogleMapsBaseLayer();
+        setUpGoogleMapsBaseLayers();
       }
     });
+});
+
+// ---- タップ（クリック）した地点にある、表示中の全レイヤーの情報をまとめて表示 ----
+
+function pointInRing(lng, lat, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1];
+    const xj = ring[j][0], yj = ring[j][1];
+    const intersect = yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function pointInGeometry(lng, lat, geometry) {
+  if (!geometry) return false;
+  if (geometry.type === "Polygon") {
+    const rings = geometry.coordinates;
+    if (!pointInRing(lng, lat, rings[0])) return false;
+    for (let k = 1; k < rings.length; k++) {
+      if (pointInRing(lng, lat, rings[k])) return false; // 穴（内側の輪）の中
+    }
+    return true;
+  }
+  if (geometry.type === "MultiPolygon") {
+    return geometry.coordinates.some((poly) =>
+      pointInGeometry(lng, lat, { type: "Polygon", coordinates: poly })
+    );
+  }
+  return false;
+}
+
+function findMatchesAtPoint(latlng) {
+  const matches = [];
+  overlayRegistry.forEach(({ layer, categoryFields }, label) => {
+    if (!map.hasLayer(layer)) return;
+    layer.eachLayer((featureLayer) => {
+      const feature = featureLayer.feature;
+      if (!feature || !pointInGeometry(latlng.lng, latlng.lat, feature.geometry)) return;
+      const categoryName = findCategoryName(feature.properties, categoryFields);
+      matches.push(categoryName ? `${label}: ${categoryName}` : label);
+    });
+  });
+  return matches;
+}
+
+map.on("click", (e) => {
+  const matches = findMatchesAtPoint(e.latlng);
+  if (matches.length === 0) return;
+  const html = `<div class="tap-popup">${matches
+    .map((line) => `<div>${line}</div>`)
+    .join("")}</div>`;
+  L.popup({ maxWidth: 280 }).setLatLng(e.latlng).setContent(html).openOn(map);
 });
 
 // レイヤー一覧パネル。用途地域のように splitByCategory: true のレイヤーは、
@@ -393,7 +395,6 @@ function buildSimpleRow(label, layer) {
   checkbox.addEventListener("change", () => {
     if (checkbox.checked) layer.addTo(map);
     else layer.remove();
-    renderLegend();
   });
   row.appendChild(checkbox);
   row.appendChild(document.createTextNode(label));
@@ -435,7 +436,6 @@ function buildGroupRow(def) {
       if (cb.checked) layer.addTo(map);
       else layer.remove();
       updateMasterState();
-      renderLegend();
     });
     row.appendChild(cb);
     row.appendChild(document.createTextNode(categoryName));
@@ -458,7 +458,6 @@ function buildGroupRow(def) {
       else layer.remove();
     });
     masterCheckbox.indeterminate = false;
-    renderLegend();
   });
 
   arrow.addEventListener("click", () => {
@@ -471,16 +470,19 @@ function buildGroupRow(def) {
   return wrapper;
 }
 
-// GOOGLE_MAPS_API_KEY が設定されている場合のみ、Googleマップをベースレイヤーの
-// 選択肢に追加する（leaflet.gridlayer.googlemutant プラグインを使用）。
-function setUpGoogleMapsBaseLayer() {
+// GOOGLE_MAPS_API_KEY が設定されている場合のみ、Googleマップ（地図・航空写真）を
+// ベースレイヤーの選択肢に追加する（leaflet.gridlayer.googlemutant プラグインを使用）。
+function setUpGoogleMapsBaseLayers() {
   if (!GOOGLE_MAPS_API_KEY) return;
   const script = document.createElement("script");
-  script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}`;
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&loading=async&callback=__onGoogleMapsLoaded`;
   script.async = true;
-  script.onload = () => {
-    const googleLayer = L.gridLayer.googleMutant({ type: "roadmap" });
-    layersControl.addBaseLayer(googleLayer, "Googleマップ");
+  window.__onGoogleMapsLoaded = () => {
+    layersControl.addBaseLayer(L.gridLayer.googleMutant({ type: "roadmap" }), "Googleマップ");
+    layersControl.addBaseLayer(
+      L.gridLayer.googleMutant({ type: "hybrid" }),
+      "Googleマップ（航空写真）"
+    );
   };
   script.onerror = () => {
     console.warn("Google Maps APIの読み込みに失敗しました。APIキーを確認してください。");
