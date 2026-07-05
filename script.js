@@ -471,18 +471,35 @@ function buildGroupRow(def) {
 }
 
 // GOOGLE_MAPS_API_KEY が設定されている場合のみ、Googleマップ（地図・航空写真）を
-// ベースレイヤーの選択肢に追加する（leaflet.gridlayer.googlemutant プラグインを使用）。
+// ベースレイヤーの選択肢に追加し、読み込みに成功したらデフォルトの背景を
+// 地理院地図からGoogleマップへ切り替える（leaflet.gridlayer.googlemutant プラグインを使用）。
+// 起動直後に地理院地図を表示しておくのは、Googleマップの読み込みに失敗しても
+// 地図が真っ白にならないようにするための保険。
 function setUpGoogleMapsBaseLayers() {
   if (!GOOGLE_MAPS_API_KEY) return;
+  let googleRoadLayer = null;
   const script = document.createElement("script");
   script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&loading=async&callback=__onGoogleMapsLoaded`;
   script.async = true;
   window.__onGoogleMapsLoaded = () => {
-    layersControl.addBaseLayer(L.gridLayer.googleMutant({ type: "roadmap" }), "Googleマップ");
+    googleRoadLayer = L.gridLayer.googleMutant({ type: "roadmap" });
+    layersControl.addBaseLayer(googleRoadLayer, "Googleマップ");
     layersControl.addBaseLayer(
       L.gridLayer.googleMutant({ type: "hybrid" }),
       "Googleマップ（航空写真）"
     );
+    // デフォルトの背景をGoogleマップに切り替え
+    map.removeLayer(gsiLayer);
+    googleRoadLayer.addTo(map);
+  };
+  // APIキーの認証エラー時（リファラー制限で許可されていないURLで開いた場合など）に
+  // Googleから呼ばれるフック。地理院地図に戻して地図が使えない状態を防ぐ。
+  window.gm_authFailure = () => {
+    console.warn("Google Maps 認証エラー（リファラー制限等）。地理院地図に戻します。");
+    if (googleRoadLayer && map.hasLayer(googleRoadLayer)) {
+      map.removeLayer(googleRoadLayer);
+    }
+    if (!map.hasLayer(gsiLayer)) gsiLayer.addTo(map);
   };
   script.onerror = () => {
     console.warn("Google Maps APIの読み込みに失敗しました。APIキーを確認してください。");
