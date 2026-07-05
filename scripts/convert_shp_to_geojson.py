@@ -12,6 +12,7 @@
   新しい種類のデータが増えたら NAME_MAP に追記するとよい。
 """
 
+import json
 import pathlib
 from osgeo import gdal, ogr
 
@@ -21,6 +22,10 @@ ogr.UseExceptions()
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent
 SRC_DIR = PROJECT_ROOT / "都市計画区域"
 OUT_DIR = PROJECT_ROOT / "data"
+
+# シェープファイルのエクスポート元（QGISプロジェクト）の絶対パスがそのまま入っており、
+# 公開時にローカルのユーザー名などが漏れてしまうため、公開用データからは取り除く。
+DROP_FIELDS = {"path", "layer"}
 
 # 日本語のシェープファイル名 → 出力するGeoJSONファイル名(ローマ字slug)
 NAME_MAP = {
@@ -51,7 +56,18 @@ def convert_one(shp_path: pathlib.Path) -> str:
         format="GeoJSON",
         dstSRS="EPSG:4326",
     )
+    _strip_fields(out_path)
     return out_name
+
+
+def _strip_fields(geojson_path: pathlib.Path):
+    with open(geojson_path, encoding="utf-8") as f:
+        data = json.load(f)
+    for feature in data["features"]:
+        for field in DROP_FIELDS:
+            feature["properties"].pop(field, None)
+    with open(geojson_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False)
 
 
 def main():
