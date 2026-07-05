@@ -63,12 +63,28 @@ html, body {
   background: white;
   border-radius: 5px;
   box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
-  padding: 8px 10px;
-  max-height: 80vh;
-  overflow-y: auto;
   font-size: 13px;
-  min-width: 220px;
+  min-width: 150px;
   line-height: 1.5;
+}
+
+.layer-panel-toggle {
+  padding: 6px 10px;
+  cursor: pointer;
+  font-weight: bold;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.layer-panel-content {
+  padding: 0 10px 8px;
+  max-height: 75vh;
+  overflow-y: auto;
+  min-width: 220px;
+}
+
+.layer-panel-content.collapsed {
+  display: none;
 }
 
 .layer-row {

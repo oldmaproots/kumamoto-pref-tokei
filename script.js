@@ -6,17 +6,28 @@ const INITIAL_ZOOM = 9;
 // 空のままなら地理院地図のみで動作する。
 const GOOGLE_MAPS_API_KEY = "AIzaSyCtL-wwxXA-7Ag6ucXyguE8KH7HZtN9Fjk";
 
-const map = L.map("map", { zoomControl: true }).setView(KUMAMOTO_CENTER, INITIAL_ZOOM);
+const map = L.map("map", { zoomControl: false }).setView(KUMAMOTO_CENTER, INITIAL_ZOOM);
 
 // 国土地理院（地理院地図）の標準地図タイルをベースマップに使用
+const GSI_ATTRIBUTION =
+  '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">地理院タイル</a>';
 const gsiLayer = L.tileLayer("https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png", {
-  attribution:
-    '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">地理院タイル</a>',
+  attribution: GSI_ATTRIBUTION,
   maxZoom: 18,
 }).addTo(map);
 
+// 地理院地図の航空写真（同じ地理院タイルの別レイヤー）
+const gsiPhotoLayer = L.tileLayer(
+  "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg",
+  {
+    attribution: GSI_ATTRIBUTION,
+    maxZoom: 18,
+  }
+);
+
 const baseLayers = {
   "地理院地図（標準）": gsiLayer,
+  "地理院地図（航空写真）": gsiPhotoLayer,
 };
 
 // 都市計画データの出典表示（国土数値情報の利用条件・CC BY 4.0 表示義務に基づく）
@@ -79,8 +90,11 @@ const LAYER_DEFS = [
     categoryFields: [],
     defaultOn: true,
     fillOpacity: 0,
-    weight: 2,
-    dashArray: "6 4",
+    weight: 4,
+    dashArray: "12 8",
+    // 地理院地図の徒歩道・行政界（グレー系）に埋もれないよう、地図上で使われない
+    // 彩度の高いマゼンタ系の色にしている
+    color: "#e6007a",
   },
   {
     key: "kuiki_kubun",
@@ -200,7 +214,8 @@ function findCategoryName(properties, categoryFields) {
   return null;
 }
 
-function styleForCategory(layerKey, categoryName, fallbackIndex) {
+function styleForCategory(layerKey, categoryName, fallbackIndex, overrideColor) {
+  if (overrideColor) return { color: overrideColor, fillColor: overrideColor };
   return categoryName
     ? CATEGORY_COLORS[categoryName] || colorForUnknownCategory(layerKey, categoryName)
     : FALLBACK_PALETTE[fallbackIndex % FALLBACK_PALETTE.length];
@@ -251,7 +266,7 @@ function makeFeatureLayer(features, def, fallbackIndex, fixedCategoryName) {
       style: (feature) => {
         const categoryName =
           fixedCategoryName ?? findCategoryName(feature.properties, def.categoryFields);
-        const style = styleForCategory(def.key, categoryName, fallbackIndex);
+        const style = styleForCategory(def.key, categoryName, fallbackIndex, def.color);
         return {
           color: style.color,
           fillColor: style.fillColor,
@@ -307,7 +322,7 @@ LAYER_DEFS.forEach((def, defIndex) => {
           style: (feature) => {
             const categoryName = findCategoryName(feature.properties, def.categoryFields);
             if (categoryName) usedCategories.add(categoryName);
-            const style = styleForCategory(def.key, categoryName, defIndex);
+            const style = styleForCategory(def.key, categoryName, defIndex, def.color);
             return {
               color: style.color,
               fillColor: style.fillColor,
@@ -333,7 +348,7 @@ LAYER_DEFS.forEach((def, defIndex) => {
       if (pendingLayers === 0) {
         if (bounds.isValid()) map.fitBounds(bounds);
         layersControl = L.control
-          .layers(baseLayers, null, { collapsed: false, position: "topleft" })
+          .layers(baseLayers, null, { collapsed: true, position: "topleft" })
           .addTo(map);
         new LayerPanelControl({ position: "topleft" }).addTo(map);
         setUpGoogleMapsBaseLayer();
@@ -348,13 +363,23 @@ const LayerPanelControl = L.Control.extend({
     const container = L.DomUtil.create("div", "layer-panel");
     L.DomEvent.disableClickPropagation(container);
     L.DomEvent.disableScrollPropagation(container);
+
+    const toggle = L.DomUtil.create("div", "layer-panel-toggle", container);
+    toggle.textContent = "☰ レイヤー";
+
+    const content = L.DomUtil.create("div", "layer-panel-content collapsed", container);
     LAYER_DEFS.forEach((def) => {
       if (def.splitByCategory && def._subLayers) {
-        container.appendChild(buildGroupRow(def));
+        content.appendChild(buildGroupRow(def));
       } else if (def._layer) {
-        container.appendChild(buildSimpleRow(def.label, def._layer));
+        content.appendChild(buildSimpleRow(def.label, def._layer));
       }
     });
+
+    toggle.addEventListener("click", () => {
+      content.classList.toggle("collapsed");
+    });
+
     return container;
   },
 });
