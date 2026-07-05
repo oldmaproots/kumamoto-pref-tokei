@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "kumamoto-cityplanning-server",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["serve.py"],
+      "port": 5501
+    }
+  ]
+}
