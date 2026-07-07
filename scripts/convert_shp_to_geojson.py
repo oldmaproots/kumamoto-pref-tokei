@@ -12,6 +12,7 @@
   新しい種類のデータが増えたら NAME_MAP に追記するとよい。
 """
 
+import datetime
 import json
 import pathlib
 from osgeo import gdal, ogr
@@ -45,7 +46,7 @@ NAME_MAP = {
 }
 
 
-def convert_one(shp_path: pathlib.Path) -> str:
+def convert_one(shp_path: pathlib.Path) -> tuple[str, int]:
     stem = shp_path.stem
     out_name = NAME_MAP.get(stem, stem)
     out_path = OUT_DIR / f"{out_name}.geojson"
@@ -56,11 +57,11 @@ def convert_one(shp_path: pathlib.Path) -> str:
         format="GeoJSON",
         dstSRS="EPSG:4326",
     )
-    _strip_fields(out_path)
-    return out_name
+    feature_count = _strip_fields(out_path)
+    return out_name, feature_count
 
 
-def _strip_fields(geojson_path: pathlib.Path):
+def _strip_fields(geojson_path: pathlib.Path) -> int:
     with open(geojson_path, encoding="utf-8") as f:
         data = json.load(f)
     for feature in data["features"]:
@@ -68,6 +69,7 @@ def _strip_fields(geojson_path: pathlib.Path):
             feature["properties"].pop(field, None)
     with open(geojson_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False)
+    return len(data["features"])
 
 
 def main():
@@ -76,9 +78,21 @@ def main():
     if not shp_files:
         print(f"[警告] {SRC_DIR} に .shp が見つかりません")
         return
+    layer_counts = {}
     for shp_path in shp_files:
-        out_name = convert_one(shp_path)
-        print(f"変換完了: {shp_path.name} -> data/{out_name}.geojson")
+        out_name, feature_count = convert_one(shp_path)
+        layer_counts[shp_path.stem] = feature_count
+        print(f"変換完了: {shp_path.name} -> data/{out_name}.geojson ({feature_count}件)")
+
+    # 変換日と各レイヤーの件数を記録する(サイト側で「データ変換日」として表示される)。
+    # 前回と件数を見比べれば、更新がちゃんと反映されたか確認しやすい。
+    metadata = {
+        "変換日": datetime.date.today().isoformat(),
+        "レイヤー件数": layer_counts,
+    }
+    with open(OUT_DIR / "metadata.json", "w", encoding="utf-8") as f:
+        json.dump(metadata, f, ensure_ascii=False, indent=2)
+    print(f"メタ情報を書き出しました: data/metadata.json (変換日: {metadata['変換日']})")
 
 
 if __name__ == "__main__":

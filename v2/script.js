@@ -373,6 +373,15 @@ const LayerPanelControl = L.Control.extend({
       content.appendChild(def.splitByCategory ? buildGroupRow(def) : buildSimpleRow(def));
     });
 
+    // データの変換日(scripts/convert_shp_to_geojson.py 実行時に記録される)を表示
+    const footer = L.DomUtil.create("div", "layer-panel-footer", content);
+    fetch(`${DATA_BASE}metadata.json`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((meta) => {
+        if (meta && meta["変換日"]) footer.textContent = `データ変換日: ${meta["変換日"]}`;
+      })
+      .catch(() => {});
+
     toggle.addEventListener("click", () => {
       content.classList.toggle("collapsed");
     });
