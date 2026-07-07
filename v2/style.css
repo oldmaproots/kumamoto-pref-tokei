@@ -1,0 +1,243 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: "Hiragino Sans", "Meiryo", sans-serif;
+}
+
+#header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  background: rgba(255, 255, 255, 0.88);
+  padding: 6px 12px;
+  border-bottom-right-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+#header h1 {
+  font-size: 15px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+#version-badge {
+  font-size: 11px;
+  color: #fff;
+  background: #283593;
+  border-radius: 8px;
+  padding: 1px 6px;
+  vertical-align: middle;
+}
+
+/* ---- 検索ボックス ---- */
+#search-box {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  flex-wrap: wrap;
+  width: 300px;
+  max-width: calc(100vw - 210px);
+}
+
+#search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  font-size: 14px;
+  border: 1px solid #bbb;
+  border-radius: 6px 0 0 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+#search-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  border: 1px solid #283593;
+  background: #283593;
+  color: white;
+  border-radius: 0 6px 6px 0;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+#search-results {
+  width: 100%;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  margin-top: 4px;
+  max-height: 50vh;
+  overflow-y: auto;
+  font-size: 13px;
+}
+
+#search-results.hidden {
+  display: none;
+}
+
+.search-result-item {
+  padding: 8px 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.search-result-item.selectable {
+  cursor: pointer;
+}
+
+.search-result-item.selectable:hover {
+  background: #eef1fb;
+}
+
+/* スマートフォンでは検索ボックスをヘッダーの下の全幅に配置 */
+@media (max-width: 600px) {
+  #header {
+    padding: 4px 8px;
+  }
+  #header h1 {
+    font-size: 12px;
+  }
+  #search-box {
+    top: 36px;
+    left: 8px;
+    right: 56px;
+    transform: none;
+    width: auto;
+    max-width: none;
+  }
+}
+
+#map {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+}
+
+.leaflet-control-layers {
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+/* ---- レイヤー一覧パネル ---- */
+.layer-panel {
+  display: inline-block;
+  background: white;
+  border-radius: 5px;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.layer-panel-toggle {
+  padding: 6px 10px;
+  cursor: pointer;
+  font-weight: bold;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.layer-panel-content {
+  padding: 0 10px 8px;
+  max-height: 70vh;
+  overflow-y: auto;
+  min-width: 220px;
+}
+
+.layer-panel-content.collapsed {
+  display: none;
+}
+
+.layer-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.layer-group-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: bold;
+}
+
+.layer-group-label {
+  cursor: default;
+}
+
+.layer-toggle-arrow {
+  cursor: pointer;
+  width: 12px;
+  display: inline-block;
+  text-align: center;
+  user-select: none;
+  color: #555;
+}
+
+.layer-group-children {
+  margin-left: 18px;
+  border-left: 1px solid #ddd;
+  padding-left: 6px;
+}
+
+.layer-group-children.collapsed {
+  display: none;
+}
+
+/* ---- タップ時のポップアップ ---- */
+.tap-popup {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ---- 現在地ボタン ---- */
+.locate-btn {
+  background: white;
+  border: 1px solid #bbb;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+}
+
+.locate-btn:active {
+  background: #eef1fb;
+}
+
+/* ---- トースト(画面下の一時通知) ---- */
+#toast {
+  position: absolute;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  background: rgba(40, 40, 40, 0.92);
+  color: white;
+  padding: 10px 18px;
+  border-radius: 20px;
+  font-size: 13px;
+  max-width: 90vw;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+
+#toast.show {
+  opacity: 1;
+}
+
+@media (max-width: 600px) {
+  .layer-panel-content {
+    max-height: 55vh;
+    min-width: 180px;
+  }
+}

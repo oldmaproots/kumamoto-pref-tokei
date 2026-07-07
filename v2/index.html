@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>熊本県都市計画区域マップ v2</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="header">
+  <h1>熊本県都市計画区域マップ <span id="version-badge">v2</span></h1>
+</div>
+<div id="search-box">
+  <input id="search-input" type="search" placeholder="住所・地名で検索" aria-label="住所・地名で検索">
+  <button id="search-btn" aria-label="検索">検索</button>
+  <div id="search-results" class="hidden"></div>
+</div>
+<div id="map"></div>
+<div id="toast" role="status"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.gridlayer.googlemutant@0.14.1/dist/Leaflet.GoogleMutant.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
