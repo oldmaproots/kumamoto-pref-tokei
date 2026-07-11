@@ -536,41 +536,104 @@ map.on("locationerror", () => {
   showToast("現在地を取得できませんでした（位置情報の許可を確認してください）");
 });
 
-// ---- 住所・地名検索(国土地理院の住所検索API。無料・キー不要) ----
+// ---- 住所・地名検索 ----
+// 表示中の背景地図に合わせて検索エンジンを自動で切り替える:
+//  - Googleマップ表示中: Google Places API(要有効化。使えない場合は地理院検索へ自動フォールバック)
+//  - 地理院地図表示中: 国土地理院の住所検索API(無料・キー不要)
 const searchInput = document.getElementById("search-input");
 const searchBtn = document.getElementById("search-btn");
 const searchResults = document.getElementById("search-results");
 let searchMarker = null;
+
+// 現在の背景地図がGoogleマップ系かどうか(baselayerchangeイベントとGoogle読み込み時に更新)
+let currentBaseIsGoogle = false;
+function updateSearchPlaceholder() {
+  searchInput.placeholder = currentBaseIsGoogle ? "Googleマップで検索" : "住所・地名で検索（地理院）";
+}
+map.on("baselayerchange", (e) => {
+  currentBaseIsGoogle = /Google/.test(e.name);
+  updateSearchPlaceholder();
+});
+
+// 検索結果を共通の形 { title, subtitle, lat, lng } に揃えて表示する
+function renderSearchResults(items) {
+  if (items.length === 0) {
+    searchResults.innerHTML = "<div class='search-result-item'>見つかりませんでした</div>";
+    return;
+  }
+  searchResults.innerHTML = "";
+  items.slice(0, 8).forEach((item) => {
+    const div = document.createElement("div");
+    div.className = "search-result-item selectable";
+    div.textContent = item.title;
+    if (item.subtitle) {
+      const sub = document.createElement("div");
+      sub.className = "search-result-subtitle";
+      sub.textContent = item.subtitle;
+      div.appendChild(sub);
+    }
+    div.addEventListener("click", () => {
+      map.flyTo([item.lat, item.lng], 15);
+      if (searchMarker) searchMarker.remove();
+      searchMarker = L.marker([item.lat, item.lng]).addTo(map).bindPopup(item.title);
+      searchResults.classList.add("hidden");
+    });
+    searchResults.appendChild(div);
+  });
+}
+
+// 国土地理院の住所検索API
+async function gsiSearch(query) {
+  const res = await fetch(
+    `https://msearch.gsi.go.jp/address-search/AddressSearch?q=${encodeURIComponent(query)}`
+  );
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const items = await res.json();
+  if (!Array.isArray(items)) return [];
+  return items.map((item) => {
+    const [lng, lat] = item.geometry.coordinates;
+    return { title: item.properties.title, subtitle: null, lat, lng };
+  });
+}
+
+// Google Places API(New)のテキスト検索。
+// Google Cloud側で「Places API (New)」を有効化し、APIキーの制限に追加すると使える。
+// 未有効の場合はここで例外が発生し、呼び出し側で地理院検索へフォールバックする。
+async function googlePlacesSearch(query) {
+  const { Place } = await google.maps.importLibrary("places");
+  const { places } = await Place.searchByText({
+    textQuery: query,
+    fields: ["displayName", "location", "formattedAddress"],
+    language: "ja",
+    region: "jp",
+    maxResultCount: 8,
+  });
+  return (places || []).map((p) => ({
+    title: p.displayName,
+    subtitle: p.formattedAddress,
+    lat: p.location.lat(),
+    lng: p.location.lng(),
+  }));
+}
 
 async function doSearch() {
   const query = searchInput.value.trim();
   if (!query) return;
   searchResults.innerHTML = "<div class='search-result-item'>検索中…</div>";
   searchResults.classList.remove("hidden");
-  try {
-    const res = await fetch(
-      `https://msearch.gsi.go.jp/address-search/AddressSearch?q=${encodeURIComponent(query)}`
-    );
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const items = await res.json();
-    if (!Array.isArray(items) || items.length === 0) {
-      searchResults.innerHTML = "<div class='search-result-item'>見つかりませんでした</div>";
+
+  // Googleマップ表示中はGoogle検索を優先し、使えなければ地理院検索に切り替える
+  if (currentBaseIsGoogle && typeof google !== "undefined") {
+    try {
+      renderSearchResults(await googlePlacesSearch(query));
       return;
+    } catch (err) {
+      console.warn("Google検索を利用できません(Places API未有効の可能性):", err);
+      showToast("Google検索を利用できないため、地理院地図の検索を使用します");
     }
-    searchResults.innerHTML = "";
-    items.slice(0, 8).forEach((item) => {
-      const [lng, lat] = item.geometry.coordinates;
-      const div = document.createElement("div");
-      div.className = "search-result-item selectable";
-      div.textContent = item.properties.title;
-      div.addEventListener("click", () => {
-        map.flyTo([lat, lng], 15);
-        if (searchMarker) searchMarker.remove();
-        searchMarker = L.marker([lat, lng]).addTo(map).bindPopup(item.properties.title);
-        searchResults.classList.add("hidden");
-      });
-      searchResults.appendChild(div);
-    });
+  }
+  try {
+    renderSearchResults(await gsiSearch(query));
   } catch (err) {
     console.warn("検索エラー:", err);
     searchResults.classList.add("hidden");
@@ -610,6 +673,8 @@ function setUpGoogleMapsBaseLayers() {
     );
     map.removeLayer(gsiLayer);
     googleRoadLayer.addTo(map);
+    currentBaseIsGoogle = true;
+    updateSearchPlaceholder();
   };
   window.gm_authFailure = () => {
     console.warn("Google Maps 認証エラー（リファラー制限等）。地理院地図に戻します。");
@@ -617,6 +682,8 @@ function setUpGoogleMapsBaseLayers() {
       map.removeLayer(googleRoadLayer);
     }
     if (!map.hasLayer(gsiLayer)) gsiLayer.addTo(map);
+    currentBaseIsGoogle = false;
+    updateSearchPlaceholder();
   };
   script.onerror = () => {
     console.warn("Google Maps APIの読み込みに失敗しました。APIキーを確認してください。");

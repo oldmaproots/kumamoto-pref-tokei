@@ -93,6 +93,12 @@ html, body {
   background: #eef1fb;
 }
 
+.search-result-subtitle {
+  font-size: 11px;
+  color: #888;
+  margin-top: 1px;
+}
+
 /* スマートフォンでは検索ボックスをヘッダーの下の全幅に配置 */
 @media (max-width: 600px) {
   #header {
